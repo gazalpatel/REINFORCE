@@ -26,7 +26,8 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        action = torch.tanh(self.fc3(x))  # Output actions in range [-1, 1]
+        # action = torch.tanh(self.fc3(x))  # Output actions in range [-1, 1]
+        action = torch.sigmoid(self.fc3(x))
         return action
 
 # Define the Critic Network
@@ -103,8 +104,8 @@ class DDPGAgent:
         action = self.actor(state).detach().numpy()[0]
         action = np.clip(action + noise * np.random.randn(*action.shape), -1, 1)
         # return action
-        discrete_action = 0 if action < 0 else 1  # action < 0 -> move left, action >= 0 -> move right
-
+        #discrete_action = 0 if action < 0 else 1  # action < 0 -> move left, action >= 0 -> move right
+        discrete_action = 0 if action < 0.5 else 1  # action < 0 -> move left, action >= 0 -> move right
         return discrete_action
 
 #     def update(self):
@@ -277,6 +278,44 @@ def train_ddpg(env, agent, episodes=1000, max_timesteps=200):
     print('Train summary: ')
     print(pd.Series(reward_records).describe())
         
+
+
+
+def test_agent(i, print_reward=False):
+    env = gym.make('CartPole-v0')
+    env.seed(i)
+    s = env.reset()
+    env.seed(i)
+    rewards = []
+    obs=[]
+    for t in range(200):
+        a = agent.select_action(s)
+        s, r, term, trunc = env.step(a)
+        done = term or trunc
+        rewards.append(r)
+        #print(sum(rewards))  
+        if done:
+            rew = sum(rewards)
+            if print_reward:
+                print("Reward:", rew)
+            return rew
+    env.close()
+
+
+def see_test_results(total=100):
+    random.seed(20)
+    np.random.seed(20)
+    torch.manual_seed(20)
+
+    test_scores = []
+    for i in range(total):
+        test_scores.append(test_agent(i, print_reward=False))
+        
+    print(test_scores)
+
+    print('test_score:', np.mean(test_scores))
+    print('test_success_percentage:', len([i for i in test_scores if i>=195]))
+    
         
 # Initialize the environment and agent
 env = gym.make('CartPole-v0')
@@ -289,3 +328,4 @@ agent = DDPGAgent(state_dim, action_dim)
 
 # Train the agent
 train_ddpg(env, agent)
+see_test_results(100)
